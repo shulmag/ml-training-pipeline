@@ -1,8 +1,8 @@
 '''
 Author: Mitas Ray
 Date: 2025-01-21
-Last Editor: Gil 
-Last Edit Date: 2025-07-24
+Last Editor: Hadassah
+Last Edit Date: 2025-10-02
 
 Description: framework for training and evaluating yield spread models.
 
@@ -71,6 +71,9 @@ from google.cloud import storage
 import re
 from datetime import datetime
 
+import os
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/hadassahlurbur/repos/ficc_python/creds.json"
+
 # 1) Put the repo root on sys.path ONCE
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(REPO_ROOT)
@@ -88,7 +91,7 @@ aux.SAVE_MODEL_AND_DATA = True
 from ficc.utils.auxiliary_functions import (
     function_timer, get_ys_trade_history_features, get_dp_trade_history_features
 )
-os.environ["google_application_credentials"] = '/Users/hadassahlurbur/repos/ficc_python/creds.json'
+
 
 
 MODEL = 'yield_spread_with_similar_trades'
@@ -272,12 +275,10 @@ def evaluate_model_on_day_alt_data_combos(
     import gcsfs
     import gc
 
-
-    # ALTERED_TRADES_CSV = "/home/hadassahlurbur/ficc_python/notebooks/hadassah_trade_type_research/alt_rtrs_cntrl_nums.csv" #VM
     ALTERED_TRADES_CSV = "/Users/hadassahlurbur/repos/ficc_python/notebooks/hadassah_trade_type_research/alt_rtrs_cntrl_nums.csv"
     ENCODERS_GCS_PATH = "gs://automated_training/encoders_similar_trades.pkl"
 
-    altered_set = set(load_altered_cntrls(ALTERED_TRADES_CSV))
+    altered_set = set(aux.load_altered_cntrls(ALTERED_TRADES_CSV))
     
 
     # build eval sets as lightweight views
@@ -410,8 +411,8 @@ def evaluate_model_on_single_day(
                 test_data.loc[idx, 'target_attention_features'] = np.tile(target_features, (1, 1))
     
     # 3. Load the model
-    # model_path = f'gs://automated_training/similar-trades-v2-model-{model_date}'
-    model_path = '/home/hadassahlurbur/ficc_python/notebooks/train_model/alt_type_yield_spread_with_similar_trades_2025-09-17T00:00:00.000000000'
+    model_path = f'gs://automated_training/similar-trades-v2-model-{model_date}'
+    # model_path = '/home/hadassahlurbur/ficc_python/notebooks/train_model/alt_type_yield_spread_with_similar_trades_2025-09-17T00:00:00.000000000'
     print(f"Loading model from {model_path}")
     model = keras.models.load_model(model_path)
     
@@ -424,9 +425,11 @@ def evaluate_model_on_single_day(
     
     # 5. Create inputs
     # from auxiliary_functions import create_input
+    breakpoint()
     x_test, y_test = aux.create_input(test_data, encoders, 'yield_spread_with_similar_trades')
     
     # 6. Generate predictions
+    breakpoint()
     predictions = model.predict(x_test, batch_size=1000)
     
     # 7. Calculate metrics and segment results
@@ -691,7 +694,7 @@ if __name__ == '__main__':
             sys.exit(1)
         
         aux.setup_gpus(False)
-        data = get_processed_data_pickle_file(MODEL)
+        data = get_processed_data_pickle_file(model = MODEL)
         
         # For single evaluations, just loop through the combinations
         for model_date in args.model_dates:
@@ -711,8 +714,8 @@ if __name__ == '__main__':
 
     else:  # train mode (default)
         aux.setup_gpus(False)
-        #Pass in date here to enforce a end date for the sliding window of models other than the most recent date in the data
-        data = get_processed_data_pickle_file(MODEL)
+        #Pass in 'date' here to enforce a end date for the sliding window of models other than the most recent date in the data
+        data = get_processed_data_pickle_file(model = MODEL)
         output_file_name = 'output.txt'
         #Change num_days to train models over a larger sliding window of dates
         train_model_from_data_file(data, NUM_DAYS, output_file_name) 
