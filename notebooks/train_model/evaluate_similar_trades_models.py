@@ -225,7 +225,7 @@ def train_model_from_data_file(data: pd.DataFrame, num_days: int, output_file_pa
                 except Exception as e:
                     lf.write(f"  - {set_name:12s} | EVAL ERROR: {e}\n")
         # ---- free memory for this iteration ----
-        del day_df, altered_df, exclusions_set, trained_model, mae_df, window_df
+        del day_df, exclusions_set, trained_model, mae_df, window_df
         tf.keras.backend.clear_session()
         gc.collect()
 
@@ -259,80 +259,6 @@ def list_similar_trades_models(bucket_name='automated_training', prefix='similar
         print(f"  {model['date']}: {model['path']}")
     
     return models
-
-def evaluate_model_on_day_alt_data_combos(
-    model_date: str,
-    test_date: str,
-    data: pd.DataFrame = None
-    ):
-    """Load a pre-trained model and evaluate it on a specific test date. Evaluate on multiple test sets. Writes results to
-        a csv file output. 
-    """
-    import tensorflow as tf
-    from tensorflow import keras
-    from datetime import datetime
-    from pytz import timezone
-    import gcsfs
-    import gc
-
-    ALTERED_TRADES_CSV = "/Users/hadassahlurbur/repos/ficc_python/notebooks/hadassah_trade_type_research/alt_rtrs_cntrl_nums.csv"
-    ENCODERS_GCS_PATH = "gs://automated_training/encoders_similar_trades.pkl"
-
-    altered_set = set(aux.load_altered_cntrls(ALTERED_TRADES_CSV))
-    
-
-    # build eval sets as lightweight views
-    day_df      = data.loc[data["trade_date"] == test_date]
-    print(f"Test data shape for {test_date}: {day_df.shape}")
-    altered_df  = day_df.loc[day_df["rtrs_control_number"].isin(altered_set)]
-    exclusions_set, _ = aux.apply_exclusions(day_df)
-  
-    
-    # 3. Load the model
-    model_path = f'gs://automated_training/similar-trades-v2-model-{model_date}'
-    print(f"Loading model from {model_path}")
-    model = keras.models.load_model(model_path)
-    
-    # 4. Load the encoders from GCS
-    fs = gcsfs.GCSFileSystem()
-    encoders   = load_encoders(ENCODERS_GCS_PATH)
-    print(f"Loaded encoders from {ENCODERS_GCS_PATH}")
-
-    eval_sets = [
-        ("full test day", day_df),
-        ("altered trade type", altered_df),
-        ("exclusions applied", exclusions_set),
-    ]
-
-    out_csv = "regular_type_model_results.csv"
-    out_log = "regular_type_model_log.log"
-    header = "test_date,test_set,mae,rmse,trade_count\n"
-
-    csv_is_new = not Path(out_csv).exists() or Path(out_csv).stat().st_size == 0
-    with open(out_csv, "a") as cf, open(out_log, "a") as lf:
-        if csv_is_new:
-            cf.write(header)
-
-        for set_name, df in eval_sets:
-            try:
-                if df is None or df.empty:
-                    lf.write(f"{test_date} - {set_name:16s} | SKIP (empty)\n")
-                    continue
-                metrics = evaluate_with_model(model, df, encoders)
-                cf.write(
-                    f"{test_date},{set_name},"
-                    f"{metrics['mae']},{metrics['rmse']},{metrics['trade_count']}\n"
-                )
-                lf.write(
-                    f"{test_date} - {set_name:16s} | "
-                    f"n={metrics['trade_count']:5d} | MAE={metrics['mae']:.3f} | RMSE={metrics['rmse']:.3f}\n"
-                )
-            except Exception as e:
-                lf.write(f"{test_date} - {set_name:16s} | EVAL ERROR: {e}\n")
-        tf.keras.backend.clear_session()
-        gc.collect()
-
-    return True
 
 def evaluate_model_on_single_day(
     model_date: str,
@@ -425,11 +351,9 @@ def evaluate_model_on_single_day(
     
     # 5. Create inputs
     # from auxiliary_functions import create_input
-    breakpoint()
     x_test, y_test = aux.create_input(test_data, encoders, 'yield_spread_with_similar_trades')
     
     # 6. Generate predictions
-    breakpoint()
     predictions = model.predict(x_test, batch_size=1000)
     
     # 7. Calculate metrics and segment results
