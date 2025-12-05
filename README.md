@@ -1,4 +1,3 @@
-# Ficc AI corp internal python package
 ### This repository contains a python package for internal development and research.
 
 This package contains:
